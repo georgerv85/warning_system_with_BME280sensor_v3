@@ -2,20 +2,66 @@
 
 #include <Wire.h>                  // βιβλιοθήκη για I2C επικοινωνία
 #include <Adafruit_BME280.h>       // βιλιοθήκη για τον αισθητήρα
+#include "Arduino_LED_Matrix.h"
 
+ArduinoLEDMatrix matrix;          // Δημιουργία object matrix
 Adafruit_BME280 bme;              // Δημιουργία object αισθητήρα
 
 int packet = 1;
 float temperature; //real
 float humidity;    //real
-float presure;    //real
+float pressure;    //real
 
 float batteryVoltage = 7.4;
-float signalStrength = 12.0;
+float signalStrength = 82.0;
 
-const float highTemperature = 40;
+const float highTemperature = 10;
 const float lowBatteryVoltage = 7.2;
 const float lowSignalStrength = 50.0;
+
+uint8_t okFrame[8][12] = {
+  {0,0,0,0,0,0,0,0,0,0,0,0},
+  {0,0,0,0,0,0,0,0,0,1,0,0},
+  {0,0,0,0,0,0,0,0,1,0,0,0},
+  {0,0,1,0,0,0,0,1,0,0,0,0},
+  {0,0,0,1,0,0,1,0,0,0,0,0},
+  {0,0,0,0,1,1,0,0,0,0,0,0},
+  {0,0,0,0,0,0,0,0,0,0,0,0},
+  {0,0,0,0,0,0,0,0,0,0,0,0}
+};
+
+uint8_t tempFrame[8][12] = {
+  {0,0,1,1,1,1,1,1,1,1,0,0},
+  {0,0,0,0,0,1,1,0,0,0,0,0},
+  {0,0,0,0,0,1,1,0,0,0,0,0},
+  {0,0,0,0,0,1,1,0,0,0,0,0},
+  {0,0,0,0,0,1,1,0,0,0,0,0},
+  {0,0,0,0,0,1,1,0,0,0,0,0},
+  {0,0,0,0,0,1,1,0,0,0,0,0},
+  {0,0,0,0,0,0,0,0,0,0,0,0}
+};
+
+uint8_t batteryFrame[8][12] = {
+  {0,0,1,1,1,1,1,0,0,0,0,0},
+  {0,0,1,0,0,0,0,1,0,0,0,0},
+  {0,0,1,0,0,0,0,1,0,0,0,0},
+  {0,0,1,1,1,1,1,0,0,0,0,0},
+  {0,0,1,0,0,0,0,1,0,0,0,0},
+  {0,0,1,0,0,0,0,1,0,0,0,0},
+  {0,0,1,1,1,1,1,0,0,0,0,0},
+  {0,0,0,0,0,0,0,0,0,0,0,0}
+};
+
+uint8_t signalFrame[8][12] = {
+  {0,0,0,1,1,1,1,1,1,0,0,0},
+  {0,0,1,0,0,0,0,0,0,0,0,0},
+  {0,0,1,0,0,0,0,0,0,0,0,0},
+  {0,0,0,1,1,1,1,1,0,0,0,0},
+  {0,0,0,0,0,0,0,0,1,0,0,0},
+  {0,0,0,0,0,0,0,0,1,0,0,0},
+  {0,0,1,1,1,1,1,1,0,0,0,0},
+  {0,0,0,0,0,0,0,0,0,0,0,0}
+};
 
 
 
@@ -29,8 +75,9 @@ void setup() {
     // περιμένει να ανοίξει η σειριακή σύνδεση
   }
 
+  matrix.begin();
 
-  // Αρχικοποίηση αισθητήρα
+  // Αρχικοποίηση αισθητήρα bme280 και έλεγχος
   if (!bme.begin(0x77)) {       // Αν δεν βρεθεί ο αισθητήρας στη διεύθυνση 0x76, εμφανίζει μήνυμα και σταματά.
     Serial.println("BME280 sensor not found");
     while (true) {
@@ -45,15 +92,33 @@ void setup() {
 void loop() {
 
 
-  float temperature = bme.readTemperature(); // Λαμβάνει την πραγματική θερμοκρασία
-  float humidity = bme.readHumidity(); // Λαμβάνει πραγματική υγρασία
-  float presure = bme.readPressure()/100 ; // Λαμβάνει πραγματική πίεση from Pascal to hPa
-  bool systemCheck;
+  temperature = bme.readTemperature(); // Λαμβάνει την πραγματική θερμοκρασία
+  humidity = bme.readHumidity(); // Λαμβάνει πραγματική υγρασία
+  pressure = bme.readPressure()/100 ; // Λαμβάνει πραγματική πίεση from Pascal to hPa
+
+  bool systemCheck = true;
   
   if(temperature > highTemperature || batteryVoltage < lowBatteryVoltage || signalStrength < lowSignalStrength){
     systemCheck = false;
-  }else{
-    systemCheck = true;
+  }
+
+  if (systemCheck){
+    matrix.renderBitmap(okFrame, 8, 12);
+  }else if (temperature > highTemperature){
+    matrix.renderBitmap(tempFrame, 8, 12);
+    delay(250);
+    matrix.clear();
+    delay(250);
+  }else if (batteryVoltage < lowBatteryVoltage){
+    matrix.renderBitmap(batteryFrame, 8, 12);
+    delay(250);
+    matrix.clear();
+    delay(250);
+  }else if (signalStrength < lowSignalStrength){
+    matrix.renderBitmap(signalFrame, 8, 12);
+    delay(250);
+    matrix.clear();
+    delay(250);
   }
 
   Serial.print("Packet: ");
@@ -68,7 +133,7 @@ void loop() {
   Serial.println(" %");
 
   Serial.print("Pressure: ");
-  Serial.print(presure, 1);
+  Serial.print(pressure, 1);
   Serial.println(" hPa");
 
   Serial.print("Battery Voltage: ");
@@ -101,7 +166,6 @@ void loop() {
   Serial.println("----------------------------");
 
   packet++;
-  delay(5000);
+  delay(2000);
 
 }
-
